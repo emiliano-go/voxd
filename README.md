@@ -8,8 +8,7 @@
 
 **Naming:** `voxd` is _vox_ (voice) plus `d` (daemon) following Unix daemon convention. The long-running listener is `voxd`; the CLI entrypoint is `voxd <subcommand>`; the standalone popup/TTS client is `voxctl`.
 
-> **WIP.** v0.1 is a foreground blocking loop. Kill with Ctrl-C. Daemonization arrives in v1.
-
+> **WIP.** v0.1 is a foreground blocking loop that is **still being built**. This readme represents the v0.1 final state. Kill with Ctrl-C. Daemonization arrives in v1.
 ---
 
 ## Quick start
