@@ -1,10 +1,7 @@
 import subprocess
-import shutil
 from pathlib import Path
 
-
-def app_exists(app: str) -> bool:
-    return shutil.which(app) is not None
+from .helpers.apps import app_exists
 
 
 def launch_app(app : str):
