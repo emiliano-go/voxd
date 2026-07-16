@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 from collections.abc import Callable
 
-from volume import volume_control
+from .volume import volume_control
+from .system_query import io, time, network, battery, disk
+from .media import media_control
+from .apps import launch_app
+from .window import window_action
+from .workspace import workspace_switch
 
 
 @dataclass(frozen=True)
@@ -43,6 +48,15 @@ class Entry:
 # Tool registry
 REGISTRY: dict[str, Entry] = {
     "volume_control" : volume_control,
+    "battery" : battery,
+    "time" : time,
+    "network" : network,
+    "disk" : disk,
+    "io" : io,
+    "media_control" : media_control,
+    "launch_app" : launch_app,
+    "window_action" : window_action,
+    "workspace_switch" : workspace_switch
 }
 
 
