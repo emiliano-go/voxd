@@ -36,8 +36,8 @@ def network() -> NetworkState:
 
     return NetworkState.LIMITED
 
-def disk(path: str | Path = "/"):
-    usage = shutil.disk_usage(path)
+def disk():
+    usage = shutil.disk_usage("/")
 
     return {
         "total": format_bytes(usage.total),
@@ -46,7 +46,7 @@ def disk(path: str | Path = "/"):
         "percent": round(usage.used / usage.total * 100, 1),
     }
 
-def io(interval: float = 0.5):
+def io():
     """
     Measure disk utilization over the given interval.
 
@@ -60,12 +60,12 @@ def io(interval: float = 0.5):
         }
     """
     start = psutil.disk_io_counters(perdisk=True)
-    timelib.sleep(interval)
+    timelib.sleep(0.5)
     end = psutil.disk_io_counters(perdisk=True)
 
     utilization: dict[str, float] = {}
 
-    elapsed_ms = interval * 1000
+    elapsed_ms = 0.5 * 1000
 
     for device, end_stats in end.items():
         if not is_physical_disk(device):
@@ -84,5 +84,3 @@ def io(interval: float = 0.5):
         utilization[device] = round(percent, 1)
 
     return utilization
-
-print(io())
