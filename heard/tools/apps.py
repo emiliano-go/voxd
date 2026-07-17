@@ -13,7 +13,7 @@ def launch_app(app : str):
             ["uwsm", "app", "--", app],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            start_new_session=True,      # detach: app survives voxd restarts
+            start_new_session=True,      # detach: app survives heard restarts
         )
         return f"ok: launched {app}"
     except FileNotFoundError:

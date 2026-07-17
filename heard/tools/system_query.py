@@ -4,8 +4,8 @@ import shutil
 import time as timelib
 import psutil
 
-from voxd.tools.helpers.network import _has_internet, NetworkState, _has_active_interface
-from voxd.tools.helpers.system import format_bytes, is_physical_disk
+from heard.tools.helpers.network import _has_internet, NetworkState, _has_active_interface
+from heard.tools.helpers.system import format_bytes, is_physical_disk
 
 def battery() -> tuple[str, int] | None:
     for supply in Path("/sys/class/power_supply").iterdir():
