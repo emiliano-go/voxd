@@ -1,4 +1,4 @@
-# voxd
+# heard
 
 > Voice-controlled tooling daemon for Linux. Speech to intent resolution to tool dispatch. Local-first.
 
@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge)]()
 [![Arch](https://img.shields.io/badge/Target-Arch%20Linux-1793D1?logo=archlinux&logoColor=white&style=for-the-badge)]()
 
-**Naming:** `voxd` is _vox_ (voice) plus `d` (daemon) following Unix daemon convention. The long-running listener is `voxd`; the CLI entrypoint is `voxd <subcommand>`; the standalone popup/TTS client is `voxctl`.
+hear + d. It's the joke `sshd` would make if it could. Reads as an English word, is exactly what the daemon does, and `heard: launching spotify` in a log line is funny. 
 
 > **WIP.** v0.1 is a foreground blocking loop that is **still being built**. This readme represents the v0.1 final state. Kill with Ctrl-C. Daemonization arrives in v1.
 ---
@@ -14,7 +14,7 @@
 ## Quick start
 
 ```bash
-uv run -m voxd.cli listen
+uv run -m heard.cli listen
 ```
 
 Push-to-talk, say a command, watch it execute. That is the v0.1 loop:
@@ -31,7 +31,7 @@ Push-to-talk, say a command, watch it execute. That is the v0.1 loop:
 
 ## Why Needle?
 
-voxd routes spoken commands to tool calls. That is a classification problem, not a general reasoning problem. A 26M function-call model like Needle is the right tool for three reasons:
+heard routes spoken commands to tool calls. That is a classification problem, not a general reasoning problem. A 26M function-call model like Needle is the right tool for three reasons:
 
 **Speed.** A larger LLM adds seconds of latency on consumer hardware. Needle loads in tens of milliseconds and generates a tool-call in under 200ms on a modern CPU. That keeps the end-to-end pipeline fast enough for voice interactions (speech in, action out, no perceptible delay).
 
@@ -66,7 +66,7 @@ capture audio -> stt.py (Whisper) -> intent.py (Needle) -> tools/registry.py -> 
                                                                                stdout result
 ```
 
-Every component is a single file under `voxd/`. No persistence, no analytics, no responder process. The intent model loads once as a lazy module-level singleton and stays hot for the lifetime of the process.
+Every component is a single file under `heard/`. No persistence, no analytics, no responder process. The intent model loads once as a lazy module-level singleton and stays hot for the lifetime of the process.
 
 The dispatcher (`tools/registry.py`) holds a `dict[str, Callable]` mapping tool names to handler functions. It never passes raw model output to a shell. Arguments are matched against the tool schema and dispatched with `handler(**arguments)`. The `shell_allowlist.py` provides known-safe command templates for the few tools that need subprocess execution; the model selects an allowlisted action, never arbitrary shell text.
 
@@ -75,10 +75,10 @@ The dispatcher (`tools/registry.py`) holds a `dict[str, Callable]` mapping tool 
 ## Repo structure
 
 ```
-voxd/
+heard/
 ├── pyproject.toml
-├── voxd/
-│   ├── cli.py                 # entrypoint: voxd listen
+├── heard/
+│   ├── cli.py                 # entrypoint: heard listen
 │   ├── stt.py                 # whisper capture + transcription
 │   ├── intent.py              # Needle load + generate wrapper
 │   ├── shell_allowlist.py     # safe command templates
