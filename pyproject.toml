@@ -5,5 +5,19 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "evdev>=1.9.3",
+    "faster-whisper>=1.2.1",
+    "needle",
     "psutil>=7.2.2",
+    "sounddevice>=0.5.5",
+    "typer>=0.27.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+]
+
+[tool.uv.sources]
+needle = { git = "https://github.com/emiliano-go/needle.git", rev = "ffb1c5144c5a16cb8ec650dbc8a6f6fd3854f8f2" }

@@ -5,6 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&logoColor=white&style=for-the-badge)]()
 [![License](https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge)]()
 [![Arch](https://img.shields.io/badge/Target-Arch%20Linux-1793D1?logo=archlinux&logoColor=white&style=for-the-badge)]()
+[![CI](https://img.shields.io/github/actions/workflow/status/anomalyco/heard/test.yml?style=for-the-badge&logo=github)]()
 
 hear + d. It's the joke `sshd` would make if it could. Reads as an English word, is exactly what the daemon does, and `heard: launching spotify` in a log line is funny. 
 
@@ -14,18 +15,18 @@ hear + d. It's the joke `sshd` would make if it could. Reads as an English word,
 ## Quick start
 
 ```bash
-uv run -m heard.cli listen
+uv run heard.cli listen
 ```
 
-Push-to-talk, say a command, watch it execute. That is the v0.1 loop:
+Hold the Shift key, speak, release. That is the v0.1 loop:
 
-1. Capture audio (keybind press or silence detection)
-2. Transcribe via local Whisper (runs entirely on-device)
-3. Resolve intent via Needle (a 26M parameter function-call model)
+1. Hold left Shift — evdev captures key state (no X11/Wayland dependency)
+2. Release triggers capture via sounddevice, transcription via Whisper (on-device)
+3. Resolve intent via Needle (26M parameter function-call model)
 4. Dispatch to the matching tool handler (launch, media, volume, window, workspace, system query)
 5. Print result to stdout
 
-6 tools, all local, no network, no daemonization. The entire pipeline stays under ~2s from speech end to action.
+6 tools, all local, no network, no daemonization. Needle inference runs in 3.5–5.5s on this hardware (i5-1335U). The 2s target was aspirational — latency is accepted as-is for v0.1; optimization waits for finetune.
 
 ---
 
@@ -33,7 +34,7 @@ Push-to-talk, say a command, watch it execute. That is the v0.1 loop:
 
 heard routes spoken commands to tool calls. That is a classification problem, not a general reasoning problem. A 26M function-call model like Needle is the right tool for three reasons:
 
-**Speed.** A larger LLM adds seconds of latency on consumer hardware. Needle loads in tens of milliseconds and generates a tool-call in under 200ms on a modern CPU. That keeps the end-to-end pipeline fast enough for voice interactions (speech in, action out, no perceptible delay).
+**Speed.** A larger LLM adds seconds of latency on consumer hardware. Needle loads in ~1s and generates a tool-call in 3.5–5.5s on this hardware (13th-gen i5, constrained decoding). That is slow but usable for push-to-talk: the user controls when the pipeline starts, and a 4s wait for a correct action beats a 500ms hallucination. The constraint decoder is dropped post-finetune to save ~20% with no accuracy loss on the probe set.
 
 **Local-first.** Larger models often require cloud APIs or high-end GPUs. Needle runs on a laptop CPU with no special hardware and no network round trip. The only feature that ever touches the network is the optional `answer_query` fallback (v1), which is explicitly opt-in.
 
@@ -77,34 +78,39 @@ The dispatcher (`tools/registry.py`) holds a `dict[str, Callable]` mapping tool 
 ```
 heard/
 ├── pyproject.toml
+├── .github/workflows/test.yml  # CI: pytest on push/PR
 ├── heard/
-│   ├── cli.py                 # entrypoint: heard listen
-│   ├── stt.py                 # whisper capture + transcription
-│   ├── intent.py              # Needle load + generate wrapper
-│   ├── shell_allowlist.py     # safe command templates
-│   └── tools/
-│       ├── registry.py        # name -> handler dispatch
-│       ├── apps.py            # launch_app
-│       ├── media.py           # media_control
-│       ├── volume.py          # volume_control
-│       ├── window.py          # window_action (hyprctl)
-│       ├── workspace.py       # workspace_switch (hyprctl)
-│       ├── system_query.py    # battery, time, network, disk
-│       └── helpers/
-│           ├── network.py     # connectivity checks
-│           └── system.py      # format_bytes etc.
-├── checkpoints/               # gitignored, needle weights
-└── data/
-    └── tools.json             # tool schema definitions
+│   ├── cli.py                  # entrypoint: heard listen + config skeleton
+│   ├── stt.py                  # whisper capture + transcription (evdev hold-to-trigger)
+│   ├── intent.py               # Needle load + generate wrapper
+│   ├── shell_allowlist.py      # safe command templates
+│   ├── tools/
+│   │   ├── registry.py         # name -> handler dispatch + validate + known_tools()
+│   │   ├── types.py            # Ok, Rejected, Failed, ParamSpec, Entry
+│   │   ├── apps.py             # launch_app
+│   │   ├── media.py            # media_control
+│   │   ├── volume.py           # volume_control
+│   │   ├── window.py           # window_action (hyprctl)
+│   │   ├── workspace.py        # workspace_switch (hyprctl)
+│   │   ├── system_query.py     # battery, time, network, disk
+│   │   └── helpers/
+│   │       ├── network.py      # connectivity checks
+│   │       └── system.py       # format_bytes etc.
+├── tests/                      # 124 tests across 17 files
+├── checkpoints/                # gitignored, needle weights
+├── scripts/
+│   └── benchmark_latency.py    # bare-metal latency probe
+└── reports/
+    └── latency.md              # latency benchmark results
 ```
 
 ---
 
 ## Acceptance criteria (v0.1)
 
-- Each of the 6 tools resolves correctly from casual phrasing at least 5/6 times.
-- End-to-end latency from speech end to action executed stays under ~2s on local hardware.
-- Unresolvable input prints "didn't understand" to stdout; it never crashes.
+- Each of the 6 tools resolves correctly from casual phrasing at least 5/6 times (probe: 19/20 on held-out set).
+- Needle inference latency: p50 3.5–5.5s on i5-1335U (no GPU). See [`reports/latency.md`](reports/latency.md).
+- Unresolvable input prints a declined/unparseable message to stdout; it never crashes.
 
 ---
 
