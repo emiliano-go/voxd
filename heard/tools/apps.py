@@ -1,20 +1,19 @@
 import subprocess
-from pathlib import Path
 
 from .helpers.apps import app_exists
+from .types import Ok, Rejected, Result
 
 
-def launch_app(app : str):
-    
+def launch_app(app: str) -> Result:
     if not app_exists(app):
-        return f"rejected: no such app {app!r}"
+        return Rejected("launch_app", f"no such app {app!r}", "declined")
     try:
         subprocess.Popen(
             ["uwsm", "app", "--", app],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            start_new_session=True,      # detach: app survives heard restarts
+            start_new_session=True,
         )
-        return f"ok: launched {app}"
+        return Ok("launch_app", f"launched {app}")
     except FileNotFoundError:
-        return f"rejected: uwsm not found"
+        return Rejected("launch_app", "uwsm not found", "declined")

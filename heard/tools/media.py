@@ -1,13 +1,15 @@
 import subprocess
 
-def media_control(action : str):
+from .types import Failed, Ok, Rejected, Result
 
+
+def media_control(action: str) -> Result:
     if action == "play":
         cmd = ["playerctl", "play"]
-    
+
     elif action == "pause":
         cmd = ["playerctl", "pause"]
-    
+
     elif action == "next":
         cmd = ["playerctl", "next"]
 
@@ -15,8 +17,10 @@ def media_control(action : str):
         cmd = ["playerctl", "previous"]
 
     else:
-        return f"rejected: bad action {action!r}"  
-    
-    subprocess.run(cmd, check=True)
+        return Rejected("media_control", f"bad action {action!r}", "invalid_value")
 
-    return f"ok: media {action}"
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        return Failed("media_control", f"{cmd[0]} not found")
+    return Ok("media_control", f"media {action}")

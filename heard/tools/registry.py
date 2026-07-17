@@ -1,82 +1,124 @@
-from dataclasses import dataclass
-from collections.abc import Callable
-
+from .types import Ok, Rejected, Failed, Result, ParamSpec, Entry
+from .system_query import system_query
 from .volume import volume_control
-from .system_query import io, time, network, battery, disk
 from .media import media_control
 from .apps import launch_app
 from .window import window_action
 from .workspace import workspace_switch
 
 
-@dataclass(frozen=True)
-class Ok:
-    tool: str
-    detail: str = ""          # "launched firefox", for the popup/log
-
-
-@dataclass(frozen=True)
-class Rejected:
-    tool: str | None
-    reason: str               # why it was refused, pre-execution
-    kind: str                 # unknown_tool | bad_args | invalid_value | declined
-
-
-@dataclass(frozen=True)
-class Failed:
-    tool: str
-    reason: str               # handler ran and blew up (binary missing, etc.)
-
-
-Result = Ok | Rejected | Failed
-
-
-@dataclass(frozen=True)
-class ParamSpec:
-    required: bool
-    enum: frozenset[str] | None = None
-    coerce: Callable[[str], str] | None = None
-
-
-@dataclass(frozen=True)
-class Entry:
-    fn: Callable[..., Result]
-    description: str                    # what Needle sees in the tool schema
-    params: dict[str, ParamSpec]        # what validate() enforces
-
-
-# Tool registry
 REGISTRY: dict[str, Entry] = {
-    "volume_control" : volume_control,
-    "battery" : battery,
-    "time" : time,
-    "network" : network,
-    "disk" : disk,
-    "io" : io,
-    "media_control" : media_control,
-    "launch_app" : launch_app,
-    "window_action" : window_action,
-    "workspace_switch" : workspace_switch
+    "system_query": Entry(
+        fn=system_query,
+        description="Check system status.",
+        params={
+            "query": ParamSpec(
+                required=True,
+                enum=frozenset({"battery", "time", "network", "disk"}),
+            ),
+        },
+    ),
+    "volume_control": Entry(
+        fn=volume_control,
+        description="Change or mute system audio volume.",
+        params={
+            "action": ParamSpec(
+                required=True,
+                enum=frozenset({"up", "down", "mute", "set"}),
+            ),
+            "amount": ParamSpec(required=False),
+        },
+    ),
+    "media_control": Entry(
+        fn=media_control,
+        description="Control media playback.",
+        params={
+            "action": ParamSpec(
+                required=True,
+                enum=frozenset({"play", "pause", "next", "previous"}),
+            ),
+        },
+    ),
+    "launch_app": Entry(
+        fn=launch_app,
+        description="Launch, open, or start an application that is not running yet.",
+        params={
+            "app": ParamSpec(required=True),
+        },
+    ),
+    "window_action": Entry(
+        fn=window_action,
+        description=(
+            "Act on an already-open window: close it, focus it, or make it "
+            "fullscreen. Also used to quit or kill a running application."
+        ),
+        params={
+            "action": ParamSpec(
+                required=True,
+                enum=frozenset({"close", "focus", "fullscreen"}),
+            ),
+            "target": ParamSpec(required=False),
+        },
+    ),
+    "workspace_switch": Entry(
+        fn=workspace_switch,
+        description="Switch to a different workspace by number.",
+        params={
+            "workspace": ParamSpec(required=True),
+        },
+    ),
 }
 
 
-# Handler Registration
-def register(name : str, *, description : str, params : dict[str, ParamSpec]):
-    
-    def decorator(fn):
-        
-        if name in REGISTRY:
-            raise ValueError(f"duplicate tool name: {name}")  # catch typo'd duplicate names at import
-        
-        REGISTRY[name] = Entry(fn=fn, description=description, params=params)
-        
-        return fn                    # unchanged, fn stays directly callable/testable
-    
-    return decorator
+def known_tools() -> list[dict]:
+    tools = []
+    for name, entry in REGISTRY.items():
+        params = {}
+        for pname, pspec in entry.params.items():
+            param: dict = {"type": "string", "required": pspec.required}
+            if pspec.enum:
+                param["description"] = f"Exactly one of: {', '.join(sorted(pspec.enum))}"
+                param["enum"] = sorted(pspec.enum)
+            else:
+                param["description"] = pname
+            params[pname] = param
+        tools.append({"name": name, "description": entry.description, "parameters": params})
+    return tools
 
 
-def dispatch(call):
-    fn = REGISTRY.get(call["name"])
-    if fn is None:
-        return f"rejected: unknown tool {call['name']}"
-    return fn(**call["arguments"])
+def validate(name: str, args: dict, params: dict[str, ParamSpec]) -> dict | Rejected:
+    cleaned: dict[str, str] = {}
+    for param, spec in params.items():
+        value = args.get(param)
+        if value is None:
+            if spec.required:
+                return Rejected(name, f"missing required argument {param!r}", "bad_args")
+            continue
+        if spec.enum is not None and value not in spec.enum:
+            return Rejected(
+                name,
+                f"invalid value {value!r} for {param!r}; "
+                f"must be one of {sorted(spec.enum)}",
+                "invalid_value",
+            )
+        if spec.coerce:
+            value = spec.coerce(value)
+        cleaned[param] = value
+    return cleaned
+
+
+def dispatch(call) -> Result:
+    if not call:
+        return Rejected(None, "no tool call", "declined")
+    name = call.get("name")
+    entry = REGISTRY.get(name)
+    if entry is None:
+        return Rejected(name, f"unknown tool {name!r}", "unknown_tool")
+    args = call.get("arguments", {})
+    cleaned = validate(name, args, entry.params)
+    if isinstance(cleaned, Rejected):
+        return cleaned
+    try:
+        return entry.fn(**cleaned)
+    except Exception as e:
+        return Failed(name, str(e))

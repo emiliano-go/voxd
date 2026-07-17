@@ -6,39 +6,31 @@ import psutil
 
 from heard.tools.helpers.network import _has_internet, NetworkState, _has_active_interface
 from heard.tools.helpers.system import format_bytes, is_physical_disk
+from .types import Ok, Rejected, Result
 
-def battery() -> tuple[str, int] | None:
+
+def _battery() -> tuple[str, int] | None:
     for supply in Path("/sys/class/power_supply").iterdir():
         capacity = supply / "capacity"
         if capacity.is_file():
             return supply.name, int(capacity.read_text().strip())
-
     return None
 
 
-def time():
+def _time():
     return datetime.now()
 
 
-def network() -> NetworkState:
-    """
-    Returns:
-        NetworkState.CONNECTED
-        NetworkState.LIMITED
-        NetworkState.DISCONNECTED
-    """
-
+def _network() -> NetworkState:
     if not _has_active_interface():
         return NetworkState.DISCONNECTED
-
     if _has_internet():
         return NetworkState.CONNECTED
-
     return NetworkState.LIMITED
 
-def disk():
-    usage = shutil.disk_usage("/")
 
+def _disk():
+    usage = shutil.disk_usage("/")
     return {
         "total": format_bytes(usage.total),
         "used": format_bytes(usage.used),
@@ -46,41 +38,21 @@ def disk():
         "percent": round(usage.used / usage.total * 100, 1),
     }
 
-def io():
-    """
-    Measure disk utilization over the given interval.
 
-    Returns:
-        A dictionary mapping physical disk names to utilization percentages.
+SUB = {
+    "battery": _battery,
+    "time": _time,
+    "network": _network,
+    "disk": _disk,
+}
 
-    Example:
-        {
-            "nvme0n1": 3.4,
-            "sda": 0.0,
-        }
-    """
-    start = psutil.disk_io_counters(perdisk=True)
-    timelib.sleep(0.5)
-    end = psutil.disk_io_counters(perdisk=True)
 
-    utilization: dict[str, float] = {}
-
-    elapsed_ms = 0.5 * 1000
-
-    for device, end_stats in end.items():
-        if not is_physical_disk(device):
-            continue
-
-        start_stats = start.get(device)
-        if start_stats is None:
-            continue
-
-        if start_stats.busy_time is None or end_stats.busy_time is None:
-            continue
-
-        busy_ms = end_stats.busy_time - start_stats.busy_time
-        percent = min(100.0, busy_ms * 100 / elapsed_ms)
-
-        utilization[device] = round(percent, 1)
-
-    return utilization
+def system_query(query: str) -> Result:
+    fn = SUB.get(query)
+    if fn is None:
+        return Rejected("system_query", f"unknown query {query!r}", "invalid_value")
+    try:
+        result = fn()
+        return Ok("system_query", str(result))
+    except Exception as e:
+        return Failed("system_query", str(e))

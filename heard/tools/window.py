@@ -1,6 +1,9 @@
 import subprocess
 
-def window_action(action: str, target: str | None = None):
+from .types import Failed, Ok, Rejected, Result
+
+
+def window_action(action: str, target: str | None = None) -> Result:
     if action == "close":
         cmd = ["hyprctl", "dispatch", "closewindow", "active"]
 
@@ -9,12 +12,14 @@ def window_action(action: str, target: str | None = None):
 
     elif action == "focus":
         if target is None:
-            return "rejected: focus needs a target"
+            return Rejected("window_action", "focus needs a target", "bad_args")
         cmd = ["hyprctl", "dispatch", "focuswindow", target]
 
     else:
-        return f"rejected: bad action {action!r}"
+        return Rejected("window_action", f"bad action {action!r}", "invalid_value")
 
-    subprocess.run(cmd, check=True)
-
-    return f"ok: window {action}"
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        return Failed("window_action", f"{cmd[0]} not found")
+    return Ok("window_action", f"window {action}")
